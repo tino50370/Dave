@@ -3,6 +3,7 @@ import sys
 import os
 
 # Fetch environment variables from GitHub Secrets
+#testing
 aws_region = os.getenv("AWS_REGION", "us-east-1")  # Default to us-east-1 if not set
 lambda_role = os.getenv("AWS_ROLE_ARN")  # IAM Role ARN is passed from GitHub Secrets
 lambda_runtime = os.getenv("LAMBDA_RUNTIME", "python3.8")  # Default runtime
