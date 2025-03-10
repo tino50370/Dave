@@ -3,66 +3,59 @@ name: Deploy AWS Lambda Functions
 on:
   push:
     branches:
-      - main  # Trigger deployment only when changes are pushed to the main branch
+      - main
 
 jobs:
   check-changes:
     runs-on: ubuntu-latest
     outputs:
-      functions: ${{ steps.filter.outputs.functions }}  # Store the detected changes in the output
+      matrix: ${{ steps.filter.outputs.functions }}  # Corrected output variable
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3  # Fetch the latest code from the repository
+        uses: actions/checkout@v3
 
       - name: Check for changes in AWS Lambda functions
         id: filter
-        uses: dorny/paths-filter@v2  # This checks if any files in AWSLambdaFunctions/ changed
+        uses: dorny/paths-filter@v2
         with:
-          filters: >-
-            {
-              "functions": ["AWSLambdaFunctions/**"]
-            }
-
-      - name: Debug Changed Functions
-        run: echo "Changed functions: ${{ steps.filter.outputs.functions }}"  # Print changed functions for debugging
+          filters: |
+            functions:
+              - "AWSLambdaFunctions/**"
 
   deploy:
     needs: check-changes
     runs-on: ubuntu-latest
-    if: ${{ needs.check-changes.outputs.functions == 'true' }}  # Only run if changes were detected
+    if: ${{ fromJson(needs.check-changes.outputs.matrix) }}  # Corrected condition
     permissions:
-      id-token: write  # Required for OIDC authentication
-      contents: read  # Allows reading repository contents
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3  # Fetch the latest code again
+        uses: actions/checkout@v3
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}  # Uses the stored IAM Role ARN from GitHub Secrets
-          aws-region: ${{ secrets.AWS_REGION }}  # Uses the AWS region from GitHub Secrets
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Install dependencies
-        run: pip install boto3  # Ensure the script can use boto3
+        run: pip install boto3
 
       - name: Identify changed Lambda functions
         id: changed-functions
         run: |
-          # Extract modified directories within AWSLambdaFunctions/ and store in environment variable
-          CHANGED_DIRS=$(git diff --name-only HEAD^ HEAD -- AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u | uniq)
-          echo "Modified Lambda functions: $CHANGED_DIRS"
-          echo "functions=$(echo '$CHANGED_DIRS' | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
+          CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u)
+          echo "Modified functions: $CHANGED_DIRS"
+          echo "functions=$(echo $CHANGED_DIRS | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
 
       - name: Deploy modified Lambda functions
         env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}  # AWS region from GitHub Secrets
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          echo "Functions to be deployed: $functions"
           for FUNCTION in $(echo $functions | jq -r '.[]'); do
             echo "Deploying $FUNCTION..."
-            # IMPORTANT: The folder name MUST match the AWS Lambda function name for deployment to work
             cd AWSLambdaFunctions/$FUNCTION
             zip -r function.zip . > /dev/null
             cd ../../
