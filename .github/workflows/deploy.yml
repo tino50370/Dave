@@ -57,9 +57,10 @@ jobs:
           # Store results as JSON array in environment variable
           echo "functions=$(echo $CHANGED_DIRS | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
 
-      - name: Deploy Lambda Functions
+      - name: Deploy modified Lambda functions
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}  # Pass region to deploy script
+          LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.LAMBDA_EXECUTION_ROLE_ARN }}
         run: |
           set -e  # Fail immediately if any command fails
           
