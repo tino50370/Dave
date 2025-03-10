@@ -3,13 +3,13 @@ name: Deploy AWS Lambda Functions
 on:
   push:
     branches:
-      - main  # Trigger deployment only on changes pushed to the main branch
+      - main  # Trigger deployment only when changes are pushed to the main branch
 
 jobs:
   check-changes:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.filter.outputs.changes }}  # Store the detected changes in the output
+      functions: ${{ steps.filter.outputs.functions }}  # Store the detected changes in the output
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3  # Fetch the latest code from the repository
@@ -18,19 +18,21 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v2  # This checks if any files in AWSLambdaFunctions/ changed
         with:
-          filters: |
-            functions:
-              - "AWSLambdaFunctions/**"  # Detects changes in any Lambda function folder
+          filters: >-
+            {
+              "functions": ["AWSLambdaFunctions/**"]
+            }
+
+      - name: Debug Changed Functions
+        run: echo "Changed functions: ${{ steps.filter.outputs.functions }}"  # Print changed functions for debugging
 
   deploy:
     needs: check-changes
     runs-on: ubuntu-latest
-    if: ${{ needs.check-changes.outputs.functions == 'true' }}  
-    
-    # Only run if changes were detected
+    if: ${{ needs.check-changes.outputs.functions == 'true' }}  # Only run if changes were detected
     permissions:
       id-token: write  # Required for OIDC authentication
-      contents: read
+      contents: read  # Allows reading repository contents
 
     steps:
       - name: Checkout repository
@@ -49,14 +51,15 @@ jobs:
         id: changed-functions
         run: |
           # Extract modified directories within AWSLambdaFunctions/ and store in environment variable
-          CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u)
-          echo "Modified functions: $CHANGED_DIRS"
-          echo "functions=$(echo $CHANGED_DIRS | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
+          CHANGED_DIRS=$(git diff --name-only HEAD^ HEAD -- AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u | uniq)
+          echo "Modified Lambda functions: $CHANGED_DIRS"
+          echo "functions=$(echo '$CHANGED_DIRS' | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
 
       - name: Deploy modified Lambda functions
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}  # AWS region from GitHub Secrets
         run: |
+          echo "Functions to be deployed: $functions"
           for FUNCTION in $(echo $functions | jq -r '.[]'); do
             echo "Deploying $FUNCTION..."
             # IMPORTANT: The folder name MUST match the AWS Lambda function name for deployment to work
