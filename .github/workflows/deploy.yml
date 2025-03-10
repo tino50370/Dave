@@ -35,6 +35,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3  # Fresh checkout for deployment
+        with:
+          fetch-depth: 0 # Get full commit history
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -45,17 +47,29 @@ jobs:
       - name: Install Python Dependencies
         run: pip install boto3  # Required for deploy_lambda.py script
 
-      - name: Identify Changed Functions
+      - name: Identify changed Lambda functions
         id: changed-functions
         run: |
-          # Get modified Lambda directories using git diff
-          # Format: AWSLambdaFunctions/<function-name>/...
-          CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u)
+          # Validate base SHA exists
+          if git rev-parse --verify "${{ github.event.before }}" >/dev/null 2>&1; then
+            base_sha="${{ github.event.before }}"
+            echo "Comparing against previous commit: $base_sha"
+          else
+            echo "No valid previous commit found, using initial commit"
+            base_sha=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          # Get modified Lambda directories (exclude deleted files)
+          CHANGED_DIRS=$(git diff --name-only $base_sha ${{ github.sha }} --diff-filter=ACMRTUXB -- AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u | uniq)
           
-          echo "Detected modified functions: $CHANGED_DIRS"
-          
-          # Store results as JSON array in environment variable
-          echo "functions=$(echo $CHANGED_DIRS | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
+          if [ -z "$CHANGED_DIRS" ]; then
+            echo "⚠️ No Lambda directories modified"
+          else
+            echo "Detected changes in: $CHANGED_DIRS"
+          fi
+
+          # Store as JSON array
+          echo "functions=$(echo "$CHANGED_DIRS" | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
 
       - name: Deploy modified Lambda functions
         env:
