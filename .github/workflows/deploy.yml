@@ -3,60 +3,83 @@ name: Deploy AWS Lambda Functions
 on:
   push:
     branches:
-      - main
+      - main  # Trigger deployments only on main branch pushes
 
 jobs:
   check-changes:
+    name: Detect Lambda Function Changes
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.filter.outputs.functions }}  # Corrected output variable
+      matrix: ${{ steps.filter.outputs.functions }}  # Output filter results for next job
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3  # Required to access git history/diff
 
-      - name: Check for changes in AWS Lambda functions
+      - name: Check for Lambda Changes
         id: filter
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v2  # Specialized change detection action
         with:
           filters: |
             functions:
-              - "AWSLambdaFunctions/**"
+              - "AWSLambdaFunctions/**"  # Watch all subdirectories under AWSLambdaFunctions
 
   deploy:
-    needs: check-changes
+    name: Deploy Lambda Functions
+    needs: check-changes  # Requires completion of check-changes job first
     runs-on: ubuntu-latest
-    if: ${{ fromJson(needs.check-changes.outputs.matrix) }}  # Corrected condition
+    if: ${{ fromJson(needs.check-changes.outputs.matrix) }}  # Only run if changes detected
     permissions:
-      id-token: write
-      contents: read
+      id-token: write  # Required for AWS OIDC authentication
+      contents: read   # Required to access repository contents
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3  # Fresh checkout for deployment
 
-      - name: Configure AWS credentials using OIDC
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}  # IAM Role for deployment
+          aws-region: ${{ secrets.AWS_REGION }}  # Target AWS region
 
-      - name: Install dependencies
-        run: pip install boto3
+      - name: Install Python Dependencies
+        run: pip install boto3  # Required for deploy_lambda.py script
 
-      - name: Identify changed Lambda functions
+      - name: Identify Changed Functions
         id: changed-functions
         run: |
+          # Get modified Lambda directories using git diff
+          # Format: AWSLambdaFunctions/<function-name>/...
           CHANGED_DIRS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} AWSLambdaFunctions/ | cut -d '/' -f2 | sort -u)
-          echo "Modified functions: $CHANGED_DIRS"
+          
+          echo "Detected modified functions: $CHANGED_DIRS"
+          
+          # Store results as JSON array in environment variable
           echo "functions=$(echo $CHANGED_DIRS | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> $GITHUB_ENV
 
-      - name: Deploy modified Lambda functions
+      - name: Deploy Lambda Functions
         env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}  # Pass region to deploy script
         run: |
+          set -e  # Fail immediately if any command fails
+          
+          # Loop through each modified function from the list
           for FUNCTION in $(echo $functions | jq -r '.[]'); do
-            echo "Deploying $FUNCTION..."
-            cd AWSLambdaFunctions/$FUNCTION
+            echo "🚀 Deploying Lambda function: $FUNCTION"
+            
+            # Navigate to function directory (quoted to handle spaces)
+            cd "AWSLambdaFunctions/$FUNCTION"
+            
+            # Create deployment package
+            echo "📦 Zipping function code..."
             zip -r function.zip . > /dev/null
+            
+            # Return to root directory
             cd ../../
+            
+            # Execute deployment script
+            echo "☁️ Uploading to AWS Lambda..."
             python3 deploy_lambda.py "$FUNCTION" "AWSLambdaFunctions/$FUNCTION/function.zip"
+            
+            echo "✅ Successfully deployed $FUNCTION"
+          done  # Required to close the for loop
