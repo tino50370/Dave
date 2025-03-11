@@ -1,25 +1,16 @@
 import json
 import urllib.request
-import os
 import base64
 
-#testing1234567891
-# GitHub repository details
-GITHUB_OWNER = "tino50370"  # Replace with your GitHub username/org
-GITHUB_REPO = "Django-MVC"  # Replace with your repo name
-BRANCH = "main"
-
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')  # Optional: Needed for private repos
-
-def get_file_content_from_github(file_path):
+def get_file_content_from_github(owner, repo, branch, token, file_path):
     """
     Fetches the content of a specified file from the GitHub repository and decodes it.
     """
-    url = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/contents/{file_path}?ref={BRANCH}"
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={branch}"
     
     headers = {}
-    if GITHUB_TOKEN:
-        headers['Authorization'] = f'token {GITHUB_TOKEN}'
+    if token:
+        headers['Authorization'] = f'token {token}'
     
     req = urllib.request.Request(url, headers=headers)
     
@@ -37,16 +28,30 @@ def get_file_content_from_github(file_path):
 
 def lambda_handler(event, context):
     """
-    AWS Lambda function to fetch file contents from GitHub based on input file paths.
+    AWS Lambda function to fetch file contents from GitHub based on input parameters.
     """
     try:
         body = json.loads(event.get("body", "{}"))
-        file_paths = body.get("file_paths", [])
         
+        github_owner = body.get("GITHUB_OWNER")
+        github_repo = body.get("GITHUB_REPO")
+        branch = body.get("BRANCH", "main")  # Default to 'main' if not provided
+        github_token = body.get("GITHUB_TOKEN")
+        file_paths = body.get("filePaths", [])
+        
+        # Validate required parameters
+        if not github_owner:
+            return {"statusCode": 400, "body": json.dumps({"error": "GITHUB_OWNER is required"})}
+        if not github_repo:
+            return {"statusCode": 400, "body": json.dumps({"error": "GITHUB_REPO is required"})}
         if not file_paths:
             return {"statusCode": 400, "body": json.dumps({"error": "No file paths provided"})}
         
-        file_contents = [get_file_content_from_github(file_path) for file_path in file_paths]
+        # Fetch contents for each file
+        file_contents = [
+            get_file_content_from_github(github_owner, github_repo, branch, github_token, file_path)
+            for file_path in file_paths
+        ]
         
         return {
             'statusCode': 200,
