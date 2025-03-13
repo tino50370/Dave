@@ -5,7 +5,7 @@ import os
 # AWS Configuration
 aws_region = os.getenv("AWS_REGION", "us-east-1")  # Double-check for typos in variable names!
 lambda_role = os.getenv("LAMBDA_EXECUTION_ROLE_ARN")  # CORRECTED: Use Lambda-specific role
-lambda_runtime = os.getenv("LAMBDA_RUNTIME", "python3.8")
+lambda_runtime = os.getenv("LAMBDA_RUNTIME", "python3.13")
 lambda_handler = os.getenv("LAMBDA_HANDLER", "lambda_function.lambda_handler")
 
 # Initialize client with explicit credential chain
