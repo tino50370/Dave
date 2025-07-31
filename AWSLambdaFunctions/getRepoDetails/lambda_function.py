@@ -47,8 +47,8 @@ def lambda_handler(event, context):
         # Get repository structure
         files = get_github_files(owner, repo, branch, token)
         
-        # Prepare data for Bedrock Agent
-        bedrock_data = {
+        # Prepare data for response
+        repo_details = {
             "repository_metadata": {
                 "owner": owner,
                 "repo": repo,
@@ -56,32 +56,12 @@ def lambda_handler(event, context):
                 "private": bool(token),
                 "total_files": len(files)
             },
-            "file_structure": files,
-            "analysis_instructions": "Analyze this repository structure according to your predefined instructions."
+            "file_structure": files
         }
-        
-        # Initialize Bedrock client
-        bedrock = boto3.client(service_name='bedrock-agent-runtime')
-        
-        # Send to Bedrock Agent (replace YOUR_AGENT_ID and YOUR_AGENT_ALIAS)
-        response = bedrock.invoke_agent(
-            agentId='QVOJVU85TW',
-            agentAliasId='AXV71ARW9J',
-            sessionId=context.aws_request_id,
-            inputText=json.dumps(bedrock_data)
-        )
-        
-        # Process Bedrock response
-        result = ""
-        for event in response.get('completion'):
-            result += event['chunk']['bytes'].decode()
         
         return {
             'statusCode': 200,
-            'body': {
-                'bedrock_response': json.loads(result),
-                'github_metadata': bedrock_data['repository_metadata']
-            }
+            'body': json.dumps(repo_details)
         }
         
     except Exception as e:
