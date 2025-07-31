@@ -66,7 +66,7 @@ def lambda_handler(event, context):
         # Send to Bedrock Agent (replace YOUR_AGENT_ID and YOUR_AGENT_ALIAS)
         response = bedrock.invoke_agent(
             agentId='QVOJVU85TW',
-            agentAliasId='CHGOLQXJKV',
+            agentAliasId='AXV71ARW9J',
             sessionId=context.aws_request_id,
             inputText=json.dumps(bedrock_data)
         )
