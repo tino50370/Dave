@@ -50,9 +50,9 @@ def lambda_handler(event, context):
         # Prepare data for response
         repo_details = {
             "repository_metadata": {
-                "owner": owner,
-                "repo": repo,
-                "branch": branch,
+                "GITHUB_OWNER": owner,
+                "GITHUB_REPO": repo,
+                "BRANCH": branch,
                 "private": bool(token),
                 "total_files": len(files)
             },
