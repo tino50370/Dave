@@ -2,7 +2,7 @@
 # States: START → MODEL_INVOKED ↔ TOOL_INVOKED → FINISH
 
 """
-Hard coded configuration
+Hard‑coded configuration
 ------------------------
 - **MODEL_ID**        : Foundation model that generates/refines the Dockerfile.
 - **READ_FILE_TOOL**  : Exact `toolUse.name` the model emits when it needs file
@@ -19,12 +19,21 @@ This Lambda captures the *static* fields (everything except `filePath`) from the
 **initial user message** and stores them in `sessionAttributes`.  When the model
 requests `ReadFile`, we merge those attributes with the model‑supplied
 `filePath` so every invocation has the full parameter set.
+
+🔎 **Debugging aid**: Every helper now logs **both** the dict it is about to
+return *and* the `json.dumps()` version, so CloudWatch shows the exact payload
+Bedrock will receive.
 """
 
 import json
 import uuid
 import re
-from typing import Any, Dict, List, Tuple
+import logging
+from typing import Any, Dict, List
+
+# ——— configure root logger so `print()` isn’t required ————————————————
+logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+log = logging.getLogger(__name__)
 
 MODEL_ID: str = "anthropic.claude-3-7-sonnet-20250219-v1:0"  # <- update if you switch models
 READ_FILE_TOOL: str = "ReadFile"                              # <- must match the action‑group tool name
@@ -38,8 +47,15 @@ OPT_KEYS = {"GITHUB_TOKEN"}
 ALL_KEYS = REQ_KEYS | OPT_KEYS
 
 
+def _log_response(label: str, obj: Dict[str, Any]):
+    """Print and log the response dict and its JSON string."""
+    text_version = json.dumps(obj, default=str)  # default=str to avoid non‑serialisable values
+    log.info("%s | dict: %s", label, obj)
+    log.info("%s | json: %s", label, text_version)
+
+
 def _as_text(s: Any) -> str:
-    """Return a plain string. If `s` is a JSON string with a top level `text` key, extract it."""
+    """Return a plain string. If `s` is a JSON string with a top‑level `text` key, extract it."""
     if isinstance(s, str):
         try:
             obj = json.loads(s)
@@ -52,15 +68,10 @@ def _as_text(s: Any) -> str:
 
 
 def _extract_static_tool_params(text: str) -> Dict[str, str]:
-    """Pull BRANCH, GITHUB_REPO, GITHUB_OWNER, GITHUB_TOKEN from the user's first message.
-
-    Accepts either:
-      * raw JSON: {"BRANCH": "main", "GITHUB_REPO": "my‑repo", ...}
-      * free text lines like `BRANCH=main`, `GITHUB_REPO=my‑repo`.
-    """
+    """Pull BRANCH, GITHUB_REPO, GITHUB_OWNER, GITHUB_TOKEN from the user's first message."""
     params: Dict[str, str] = {}
 
-    # Case 1: JSON
+    # Case 1: JSON blob
     try:
         candidate = json.loads(text)
         if isinstance(candidate, dict):
@@ -72,7 +83,7 @@ def _extract_static_tool_params(text: str) -> Dict[str, str]:
     except Exception:
         pass
 
-    # Case 2: key=value lines
+    # Case 2: env‑style lines
     for line in text.splitlines():
         m = re.match(r"^(BRANCH|GITHUB_REPO|GITHUB_OWNER|GITHUB_TOKEN)\s*[=:]\s*(.+)$", line.strip())
         if m:
@@ -81,7 +92,7 @@ def _extract_static_tool_params(text: str) -> Dict[str, str]:
     return params
 
 
-def _invoke_model(messages: List[Dict[str, Any]], system_prompt: str | None = None, session_attrs: Dict[str, Any] | None = None):
+def _invoke_model(messages: List[Dict[str, Any]], *, system_prompt: str | None = None, session_attrs: Dict[str, Any] | None = None):
     body = {
         "modelId": MODEL_ID,
         "messages": messages,
@@ -90,7 +101,7 @@ def _invoke_model(messages: List[Dict[str, Any]], system_prompt: str | None = No
     if system_prompt:
         body["system"] = [{"text": system_prompt}]
 
-    response = {
+    response: Dict[str, Any] = {
         "version": "1.0",
         "actionEvent": "INVOKE_MODEL",
         "output": {
@@ -100,12 +111,14 @@ def _invoke_model(messages: List[Dict[str, Any]], system_prompt: str | None = No
     }
     if session_attrs:
         response["context"] = {"sessionAttributes": session_attrs}
+
+    _log_response("INVOKE_MODEL return", response)
     return response
 
 
 def _invoke_tool(name: str, tool_input: Dict[str, Any]):
     payload = {"toolUse": {"toolUseId": str(uuid.uuid4()), "name": name, "input": tool_input}}
-    return {
+    response = {
         "version": "1.0",
         "actionEvent": "INVOKE_TOOL",
         "output": {
@@ -113,28 +126,29 @@ def _invoke_tool(name: str, tool_input: Dict[str, Any]):
             "trace": {"event": {"text": f"INVOKE_TOOL {name}"}},
         },
     }
+    _log_response("INVOKE_TOOL return", response)
+    return response
 
 
 def _finish(text: str):
-    return {
+    response = {
         "version": "1.0",
         "actionEvent": "FINISH",
         "output": {"text": text, "trace": {"event": {"text": "FINISH"}}},
     }
+    _log_response("FINISH return", response)
+    return response
 
 
 def _first_tool_use_from_converse_response(resp: Dict[str, Any]):
-    """Return the first `toolUse` block found in a Converse response, else `None`."""
     try:
         for block in resp["output"]["message"]["content"]:
             if isinstance(block, dict) and "toolUse" in block:
                 return block["toolUse"]
     except Exception:
         pass
-
     if isinstance(resp.get("toolUse"), dict):
         return resp["toolUse"]
-
     return None
 
 
@@ -146,30 +160,25 @@ def _final_text_from_converse_response(resp: Dict[str, Any]) -> str:
             return "\n".join(texts).strip()
     except Exception:
         pass
-
     for key in ("generation", "outputText"):
         if isinstance(resp.get(key), str):
             return resp[key].strip()
-
     return json.dumps(resp)
 
 
 # ---------------------------- Handler ---------------------------------------
 
-def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
+def lambda_handler(event: Dict[str, Any], context):
     """Main entry‑point for the custom‑orchestration Lambda."""
+    log.info("Incoming event: %s", json.dumps(event))
 
     state = event.get("state")
     input_text = event.get("input", {}).get("text", "")
-
     session_attrs: Dict[str, str] = event.get("context", {}).get("sessionAttributes", {}) or {}
 
-    # ————————————— START — capture repo metadata & ask model to draft Dockerfile
+    # ————————————— START
     if state == "START":
         user_payload = _as_text(input_text)
-
-        # Extract static tool parameters and stash them in session attributes so
-        # we can reuse them for every ReadFile invocation.
         static_params = _extract_static_tool_params(user_payload)
         session_attrs.update(static_params)
 
@@ -195,7 +204,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         ]
         return _invoke_model(messages, system_prompt=system_prompt, session_attrs=session_attrs)
 
-    # ————————————— MODEL_INVOKED — inspect the model's reply
+    # ————————————— MODEL_INVOKED
     if state == "MODEL_INVOKED":
         try:
             resp = json.loads(input_text or "{}")
@@ -208,32 +217,28 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             if name != READ_FILE_TOOL:
                 return _finish(f"Unexpected tool requested: {name}")
 
-            # Merge static params from session attributes with the filePath the model supplied
             tool_input = dict(tool_use.get("input") or {})
             for key in REQ_KEYS | OPT_KEYS:
                 if key not in tool_input and key in session_attrs:
                     tool_input[key] = session_attrs[key]
 
-            # Validate required keys
             missing = [k for k in REQ_KEYS if k not in tool_input or not tool_input[k]]
             if missing:
                 return _finish(f"Missing required ReadFile parameters: {', '.join(missing)}")
 
             return _invoke_tool(name, tool_input)
 
-        # No tool call → model produced the Dockerfile
         final_text = _final_text_from_converse_response(resp)
         return _finish(final_text)
 
-    # ————————————— TOOL_INVOKED — feed tool results back to the model
+    # ————————————— TOOL_INVOKED
     if state == "TOOL_INVOKED":
         tool_result_text = _as_text(input_text).strip()
         assistant_summary = (
             "Tool results received. Use them to refine or finish the Dockerfile. "
-            "If more details are needed, request another file with a toolUse; "
-            "otherwise, output ONLY the final Dockerfile in triple backticks."
+            "If more details are needed, request another file; otherwise, output only "
+            "the final Dockerfile in triple backticks."
         )
-
         messages = [
             {"role": "assistant", "content": [{"text": assistant_summary}]},
             {
@@ -244,7 +249,4 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 ],
             },
         ]
-        return _invoke_model(messages)
-
-    # ————————————— Unknown state
-    return _finish(f"Unhandled state '{state}'. Check your orchestration Lambda.")
+        return _invoke
