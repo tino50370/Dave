@@ -94,7 +94,7 @@ jobs:
             
             # Execute deployment script
             echo "☁️ Uploading to AWS Lambda..."
-            python3 deploy_lambda.py "$FUNCTION" "AWSLambdaFunctions/$FUNCTION/function.zip"
+            python3 DeploymentScripts/deploy_lambda.py "$FUNCTION" "AWSLambdaFunctions/$FUNCTION/function.zip"
             
             echo "✅ Successfully deployed $FUNCTION"
           done  # Required to close the for loop

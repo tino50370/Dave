@@ -1,4 +1,3 @@
-# file: lambda_function.py
 import base64
 import json
 import os
