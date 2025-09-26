@@ -1,64 +1,59 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/schemas/read-repo-files.schema.json",
-  "title": "ReadRepositoryFiles",
-  "type": "object",
-  "required": ["provider", "paths"],
-  "properties": {
-    "provider": {
-      "type": "string",
-      "const": "github",
-      "description": "Currently only 'github' is supported."
+[
+  {
+    "name": "readFiles",
+    "description": "Given a GitHub repo (owner/repo or repo_url), a ref, and a list of paths, return the file contents. Text is UTF-8; binaries are base64.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["provider", "paths"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "const": "github",
+          "description": "Currently only 'github' is supported."
+        },
+        "owner": { "type": "string", "description": "GitHub org/user. Required if repo_url not provided." },
+        "repo":  { "type": "string", "description": "GitHub repository name. Required if repo_url not provided." },
+        "repo_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Alternative to owner/repo, e.g., https://github.com/octocat/Hello-World"
+        },
+        "ref":   { "type": "string", "default": "main", "description": "Branch, tag, or commit SHA." },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": { "type": "string", "description": "Path relative to repo root, e.g., 'src/app.py'." }
+        }
+      },
+      "allOf": [
+        { "anyOf": [ { "required": ["owner", "repo"] }, { "required": ["repo_url"] } ] }
+      ]
     },
-    "owner": {
-      "type": "string",
-      "description": "GitHub organization or user. Required if repo_url not provided."
-    },
-    "repo": {
-      "type": "string",
-      "description": "GitHub repository name. Required if repo_url not provided."
-    },
-    "repo_url": {
-      "type": "string",
-      "format": "uri",
-      "description": "Alternative to owner/repo. Example: https://github.com/octocat/Hello-World"
-    },
-    "ref": {
-      "type": "string",
-      "default": "main",
-      "description": "Branch, tag, or commit SHA. Defaults to 'main'."
-    },
-    "paths": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 100,
-      "items": {
-        "type": "string",
-        "description": "Path relative to repository root, e.g., 'src/app.py' or 'README.md'."
+    "outputSchema": {
+      "type": "object",
+      "required": ["provider", "owner", "repo", "ref", "results"],
+      "properties": {
+        "provider": { "type": "string", "const": "github" },
+        "owner": { "type": "string" },
+        "repo": { "type": "string" },
+        "ref":  { "type": "string" },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "source_url"],
+            "properties": {
+              "path": { "type": "string" },
+              "source_url": { "type": "string", "format": "uri" },
+              "encoding": { "type": ["string", "null"], "enum": ["utf-8", "base64", null] },
+              "length": { "type": "integer", "minimum": 0 },
+              "content": { "type": ["string", "null"] },
+              "error": { "type": ["string", "null"] }
+            }
+          }
+        }
       }
     }
-  },
-  "allOf": [
-    {
-      "anyOf": [
-        { "required": ["owner", "repo"] },
-        { "required": ["repo_url"] }
-      ]
-    }
-  ],
-  "examples": [
-    {
-      "provider": "github",
-      "owner": "octocat",
-      "repo": "Hello-World",
-      "ref": "main",
-      "paths": ["README.md", "src/app.py"]
-    },
-    {
-      "provider": "github",
-      "repo_url": "https://github.com/octocat/Hello-World",
-      "ref": "v1.2.3",
-      "paths": ["CHANGELOG.md"]
-    }
-  ]
-}
+  }
+]
