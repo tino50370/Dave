@@ -1,59 +1,48 @@
 [
   {
     "name": "readFiles",
-    "description": "Given a GitHub repo (owner/repo or repo_url), a ref, and a list of paths, return the file contents. Text is UTF-8; binaries are base64.",
+    "description": "Read files from a GitHub repository by owner/repo or repo_url at a given ref (branch/tag/SHA). Returns UTF-8 text or base64 for non-text.",
     "inputSchema": {
       "type": "object",
-      "required": ["provider", "paths"],
+      "required": ["paths"],
       "properties": {
-        "provider": {
-          "type": "string",
-          "const": "github",
-          "description": "Currently only 'github' is supported."
-        },
-        "owner": { "type": "string", "description": "GitHub org/user. Required if repo_url not provided." },
-        "repo":  { "type": "string", "description": "GitHub repository name. Required if repo_url not provided." },
-        "repo_url": {
-          "type": "string",
-          "format": "uri",
-          "description": "Alternative to owner/repo, e.g., https://github.com/octocat/Hello-World"
-        },
-        "ref":   { "type": "string", "default": "main", "description": "Branch, tag, or commit SHA." },
+        "provider": { "type": "string", "description": "Only 'github' is supported." },
+        "owner":    { "type": "string", "description": "GitHub org/user (use with 'repo')." },
+        "repo":     { "type": "string", "description": "GitHub repository name." },
+        "repo_url": { "type": "string", "description": "Alternative to owner/repo, e.g., https://github.com/octocat/Hello-World" },
+        "ref":      { "type": "string", "description": "Branch, tag, or commit SHA (default: main)." },
         "paths": {
           "type": "array",
-          "minItems": 1,
-          "maxItems": 100,
           "items": { "type": "string", "description": "Path relative to repo root, e.g., 'src/app.py'." }
         }
       },
-      "allOf": [
-        { "anyOf": [ { "required": ["owner", "repo"] }, { "required": ["repo_url"] } ] }
-      ]
+      "description": "Provide either (owner & repo) or repo_url. Lambda will validate this."
     },
     "outputSchema": {
       "type": "object",
-      "required": ["provider", "owner", "repo", "ref", "results"],
+      "required": ["results"],
       "properties": {
-        "provider": { "type": "string", "const": "github" },
-        "owner": { "type": "string" },
-        "repo": { "type": "string" },
-        "ref":  { "type": "string" },
+        "provider": { "type": "string" },
+        "owner":    { "type": "string" },
+        "repo":     { "type": "string" },
+        "ref":      { "type": "string" },
         "results": {
           "type": "array",
           "items": {
             "type": "object",
             "required": ["path", "source_url"],
             "properties": {
-              "path": { "type": "string" },
-              "source_url": { "type": "string", "format": "uri" },
-              "encoding": { "type": ["string", "null"], "enum": ["utf-8", "base64", null] },
-              "length": { "type": "integer", "minimum": 0 },
-              "content": { "type": ["string", "null"] },
-              "error": { "type": ["string", "null"] }
+              "path":       { "type": "string" },
+              "source_url": { "type": "string" },
+              "encoding":   { "type": "string", "description": "utf-8 for text; base64 for binary." },
+              "length":     { "type": "integer" },
+              "content":    { "type": "string", "description": "File contents (text or base64 string)." },
+              "error":      { "type": "string", "description": "Error message if fetch failed." }
             }
           }
         }
-      }
+      },
+      "description": "Results for each requested path."
     }
   }
 ]
