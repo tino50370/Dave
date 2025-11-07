@@ -1,52 +1,37 @@
 {
-  "type": "lambda",
   "name": "readFiles",
   "description": "Read files from a GitHub repository by owner/repo or repo_url at a given ref (branch/tag/SHA). Returns UTF-8 text or base64 for non-text.",
-  "lambda": {
-    "arn": "arn:aws:lambda:us-east-1:480564105216:function:read_Files",
-    "invokeMode": "requestResponse"
-  },
   "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "readFilesInput",
     "type": "object",
-    "description": "Provide either (owner & repo) or repo_url. Lambda will validate this.",
+    "description": "Provide either (owner & repo) or repo_url. The target will validate this.",
     "required": ["paths"],
+    "additionalProperties": false,
     "properties": {
       "provider": {
         "type": "string",
         "enum": ["github"],
         "description": "Only 'github' is supported."
       },
-      "owner": {
-        "type": "string",
-        "description": "GitHub org/user (use with 'repo')."
-      },
-      "repo": {
-        "type": "string",
-        "description": "GitHub repository name."
-      },
-      "repo_url": {
-        "type": "string",
-        "description": "Alternative to owner/repo, e.g., https://github.com/octocat/Hello-World"
-      },
-      "ref": {
-        "type": "string",
-        "description": "Branch, tag, or commit SHA (default: main)."
-      },
+      "owner":    { "type": "string", "description": "GitHub org/user (use with 'repo')." },
+      "repo":     { "type": "string", "description": "GitHub repository name." },
+      "repo_url": { "type": "string", "format": "uri", "description": "Alternative to owner/repo." },
+      "ref":      { "type": "string", "description": "Branch, tag, or commit SHA (default: main)." },
       "paths": {
         "type": "array",
-        "items": {
-          "type": "string",
-          "description": "Path relative to repo root, e.g., 'src/app.py'."
-        },
-        "minItems": 1
+        "minItems": 1,
+        "items": { "type": "string", "description": "Path relative to repo root." }
       }
-    },
-    "additionalProperties": false
+    }
   },
   "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "readFilesOutput",
     "type": "object",
     "description": "Results for each requested path.",
     "required": ["results"],
+    "additionalProperties": false,
     "properties": {
       "provider": { "type": "string" },
       "owner":    { "type": "string" },
@@ -57,17 +42,17 @@
         "items": {
           "type": "object",
           "required": ["path", "source_url"],
+          "additionalProperties": false,
           "properties": {
             "path":       { "type": "string" },
-            "source_url": { "type": "string" },
-            "encoding":   { "type": "string", "description": "utf-8 for text; base64 for binary." },
-            "length":     { "type": "integer" },
-            "content":    { "type": "string", "description": "File contents (text or base64 string)." },
-            "error":      { "type": "string", "description": "Error message if fetch failed." }
+            "source_url": { "type": "string", "format": "uri" },
+            "encoding":   { "type": "string" },
+            "length":     { "type": "integer", "minimum": 0 },
+            "content":    { "type": "string" },
+            "error":      { "type": "string" }
           }
         }
       }
-    },
-    "additionalProperties": false
+    }
   }
 }
