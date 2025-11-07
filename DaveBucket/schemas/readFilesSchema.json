@@ -1,58 +1,60 @@
-{
-  "name": "readFiles",
-  "description": "Read files from a GitHub repository by owner/repo or repo_url at a given ref (branch/tag/SHA). Returns UTF-8 text or base64 for non-text.",
-  "inputSchema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "readFilesInput",
-    "type": "object",
-    "description": "Provide either (owner & repo) or repo_url. The target will validate this.",
-    "required": ["paths"],
-    "additionalProperties": false,
-    "properties": {
-      "provider": {
-        "type": "string",
-        "enum": ["github"],
-        "description": "Only 'github' is supported."
-      },
-      "owner":    { "type": "string", "description": "GitHub org/user (use with 'repo')." },
-      "repo":     { "type": "string", "description": "GitHub repository name." },
-      "repo_url": { "type": "string", "format": "uri", "description": "Alternative to owner/repo." },
-      "ref":      { "type": "string", "description": "Branch, tag, or commit SHA (default: main)." },
-      "paths": {
-        "type": "array",
-        "minItems": 1,
-        "items": { "type": "string", "description": "Path relative to repo root." }
+[
+  {
+    "name": "readFiles",
+    "description": "Read files from a GitHub repository by owner/repo or repo_url at a given ref (branch/tag/SHA). Returns UTF-8 text or base64 for non-text.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "readFilesInput",
+      "type": "object",
+      "description": "Provide either (owner & repo) or repo_url. The target will validate this.",
+      "required": ["paths"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["github"],
+          "description": "Only 'github' is supported."
+        },
+        "owner":    { "type": "string", "description": "GitHub org/user (use with 'repo')." },
+        "repo":     { "type": "string", "description": "GitHub repository name." },
+        "repo_url": { "type": "string", "format": "uri", "description": "Alternative to owner/repo." },
+        "ref":      { "type": "string", "description": "Branch, tag, or commit SHA (default: main)." },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "description": "Path relative to repo root." }
+        }
       }
-    }
-  },
-  "outputSchema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "readFilesOutput",
-    "type": "object",
-    "description": "Results for each requested path.",
-    "required": ["results"],
-    "additionalProperties": false,
-    "properties": {
-      "provider": { "type": "string" },
-      "owner":    { "type": "string" },
-      "repo":     { "type": "string" },
-      "ref":      { "type": "string" },
-      "results": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "required": ["path", "source_url"],
-          "additionalProperties": false,
-          "properties": {
-            "path":       { "type": "string" },
-            "source_url": { "type": "string", "format": "uri" },
-            "encoding":   { "type": "string" },
-            "length":     { "type": "integer", "minimum": 0 },
-            "content":    { "type": "string" },
-            "error":      { "type": "string" }
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "readFilesOutput",
+      "type": "object",
+      "description": "Results for each requested path.",
+      "required": ["results"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string" },
+        "owner":    { "type": "string" },
+        "repo":     { "type": "string" },
+        "ref":      { "type": "string" },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "source_url"],
+            "additionalProperties": false,
+            "properties": {
+              "path":       { "type": "string" },
+              "source_url": { "type": "string", "format": "uri" },
+              "encoding":   { "type": "string" },
+              "length":     { "type": "integer", "minimum": 0 },
+              "content":    { "type": "string" },
+              "error":      { "type": "string" }
+            }
           }
         }
       }
     }
   }
-}
+]
